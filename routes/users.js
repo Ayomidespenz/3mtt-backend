@@ -1,15 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { query, get, run } = require('../database');
+const { pool } = require('../database');
 
 // GET /users - Get all users
 router.get('/', async (req, res) => {
   try {
-    const users = await query('SELECT * FROM users ORDER BY created_at DESC');
+    const result = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
     res.json({
       success: true,
-      count: users.length,
-      data: users
+      count: result.rows.length,
+      data: result.rows
     });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -25,9 +25,9 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await get('SELECT * FROM users WHERE id = ?', [id]);
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
@@ -36,7 +36,7 @@ router.get('/:id', async (req, res) => {
     
     res.json({
       success: true,
-      data: user
+      data: result.rows[0]
     });
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -62,26 +62,23 @@ router.post('/', async (req, res) => {
     }
     
     // Check if email already exists
-    const existingUser = await get('SELECT id FROM users WHERE email = ?', [email]);
-    if (existingUser) {
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingUser.rows.length > 0) {
       return res.status(400).json({
         success: false,
         message: 'Email already exists'
       });
     }
     
-    const result = await run(
-      'INSERT INTO users (name, email, age) VALUES (?, ?, ?)',
+    const result = await pool.query(
+      'INSERT INTO users (name, email, age) VALUES ($1, $2, $3) RETURNING *',
       [name, email, age]
     );
-    
-    // Get the created user
-    const newUser = await get('SELECT * FROM users WHERE id = ?', [result.id]);
     
     res.status(201).json({
       success: true,
       message: 'User created successfully',
-      data: newUser
+      data: result.rows[0]
     });
   } catch (error) {
     console.error('Error creating user:', error);
@@ -100,8 +97,8 @@ router.put('/:id', async (req, res) => {
     const { name, email, age } = req.body;
     
     // Check if user exists
-    const existingUser = await get('SELECT * FROM users WHERE id = ?', [id]);
-    if (!existingUser) {
+    const existingUser = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    if (existingUser.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
@@ -109,9 +106,9 @@ router.put('/:id', async (req, res) => {
     }
     
     // Check if email is being changed and if it already exists
-    if (email && email !== existingUser.email) {
-      const emailExists = await get('SELECT id FROM users WHERE email = ? AND id != ?', [email, id]);
-      if (emailExists) {
+    if (email && email !== existingUser.rows[0].email) {
+      const emailExists = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2', [email, id]);
+      if (emailExists.rows.length > 0) {
         return res.status(400).json({
           success: false,
           message: 'Email already exists'
@@ -119,36 +116,15 @@ router.put('/:id', async (req, res) => {
       }
     }
     
-    // Build update query dynamically
-    const updates = [];
-    const params = [];
-    
-    if (name !== undefined) {
-      updates.push('name = ?');
-      params.push(name);
-    }
-    if (email !== undefined) {
-      updates.push('email = ?');
-      params.push(email);
-    }
-    if (age !== undefined) {
-      updates.push('age = ?');
-      params.push(age);
-    }
-    
-    updates.push('updated_at = datetime("now")');
-    params.push(id);
-    
-    const updateQuery = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
-    await run(updateQuery, params);
-    
-    // Get the updated user
-    const updatedUser = await get('SELECT * FROM users WHERE id = ?', [id]);
+    const result = await pool.query(
+      'UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email), age = COALESCE($3, age), updated_at = CURRENT_TIMESTAMP WHERE id = $4 RETURNING *',
+      [name, email, age, id]
+    );
     
     res.json({
       success: true,
       message: 'User updated successfully',
-      data: updatedUser
+      data: result.rows[0]
     });
   } catch (error) {
     console.error('Error updating user:', error);
@@ -166,15 +142,15 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     
     // Check if user exists
-    const existingUser = await get('SELECT * FROM users WHERE id = ?', [id]);
-    if (!existingUser) {
+    const existingUser = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    if (existingUser.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
     
-    await run('DELETE FROM users WHERE id = ?', [id]);
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
     
     res.json({
       success: true,

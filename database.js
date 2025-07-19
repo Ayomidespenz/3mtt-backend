@@ -1,128 +1,69 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
 require('dotenv').config({ path: './config.env' });
 
-// Create database connection
-const dbPath = process.env.DB_PATH || './database.sqlite';
-const db = new sqlite3.Database(dbPath);
+// Create a connection pool
+const pool = new Pool({
+  user: process.env.DB_USER,
+  host: process.env.DB_HOST,
+  database: process.env.DB_DATABASE,
+  password: process.env.DB_PASSWORD,
+  port: process.env.DB_PORT,
+});
 
 // Initialize database and create tables
-const initializeDatabase = () => {
-  return new Promise((resolve, reject) => {
+const initializeDatabase = async () => {
+  try {
     // Create users table if it doesn't exist
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
         age INTEGER,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
 
-    db.run(createTableQuery, (err) => {
-      if (err) {
-        console.error('❌ Database initialization error:', err.message);
-        reject(err);
-        return;
-      }
-      
-      console.log('✅ Database initialized successfully');
-      
-      // Check if table has data
-      db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
-        if (err) {
-          console.error('❌ Error checking data:', err.message);
-          reject(err);
-          return;
-        }
-        
-        if (row.count === 0) {
-          // Insert sample data
-          const insertSampleData = `
-            INSERT INTO users (name, email, age) VALUES 
-            ('John Doe', 'john@example.com', 30),
-            ('Jane Smith', 'jane@example.com', 25),
-            ('Bob Johnson', 'bob@example.com', 35)
-          `;
-          
-          db.run(insertSampleData, (err) => {
-            if (err) {
-              console.error('❌ Error inserting sample data:', err.message);
-              reject(err);
-              return;
-            }
-            console.log('✅ Sample data inserted');
-            resolve();
-          });
-        } else {
-          resolve();
-        }
-      });
-    });
-  });
+    await pool.query(createTableQuery);
+    console.log('✅ Database initialized successfully');
+    
+    // Insert some sample data if table is empty
+    const checkDataQuery = 'SELECT COUNT(*) FROM users';
+    const result = await pool.query(checkDataQuery);
+    
+    if (parseInt(result.rows[0].count) === 0) {
+      const insertSampleData = `
+        INSERT INTO users (name, email, age) VALUES 
+        ('John Doe', 'john@example.com', 30),
+        ('Jane Smith', 'jane@example.com', 25),
+        ('Bob Johnson', 'bob@example.com', 35)
+        ON CONFLICT (email) DO NOTHING;
+      `;
+      await pool.query(insertSampleData);
+      console.log('✅ Sample data inserted');
+    }
+    
+  } catch (error) {
+    console.error('❌ Database initialization error:', error.message);
+    throw error;
+  }
 };
 
 // Test database connection
-const testConnection = () => {
-  return new Promise((resolve) => {
-    db.get('SELECT datetime("now") as now', (err, row) => {
-      if (err) {
-        console.error('❌ Database connection failed:', err.message);
-        resolve(false);
-      } else {
-        console.log('✅ Database connected successfully:', row.now);
-        resolve(true);
-      }
-    });
-  });
-};
-
-// Helper function for database queries
-const query = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-};
-
-// Helper function for single row queries
-const get = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row);
-      }
-    });
-  });
-};
-
-// Helper function for insert/update/delete operations
-const run = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ id: this.lastID, changes: this.changes });
-      }
-    });
-  });
+const testConnection = async () => {
+  try {
+    const result = await pool.query('SELECT NOW()');
+    console.log('✅ Database connected successfully:', result.rows[0].now);
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    return false;
+  }
 };
 
 module.exports = {
-  db,
-  query,
-  get,
-  run,
+  pool,
   initializeDatabase,
   testConnection
 }; 

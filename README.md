@@ -1,22 +1,22 @@
-# 3MTT Backend - Express.js with SQLite
+# 3MTT Backend - Express.js with PostgreSQL
 
-A complete REST API backend built with Express.js and SQLite, implementing full CRUD operations for a users resource.
+A complete REST API backend built with Express.js and PostgreSQL, implementing full CRUD operations for a users resource.
 
 ## 🚀 Features
 
 - ✅ **Express.js server** with proper middleware setup
-- ✅ **SQLite database** with automatic table creation (no external setup required!)
+- ✅ **PostgreSQL database** connection with automatic table creation
 - ✅ **Complete CRUD operations** (Create, Read, Update, Delete)
 - ✅ **Basic error handling** and validation
 - ✅ **CORS enabled** for cross-origin requests
-- ✅ **Environment configuration** for database path
+- ✅ **Environment configuration** for secure database credentials
 - ✅ **Sample data** automatically inserted for testing
 
 ## 📋 Requirements
 
 - Node.js (v14 or higher)
+- PostgreSQL database server
 - npm or yarn package manager
-- **No external database setup required!** SQLite is built into Node.js
 
 ## 🛠️ Installation & Setup
 
@@ -26,14 +26,18 @@ A complete REST API backend built with Express.js and SQLite, implementing full 
 npm install
 ```
 
-### 2. Configure Database (Optional)
+### 2. Configure Database
 
-The application uses SQLite by default, which requires no external setup! The database file will be created automatically.
-
-If you want to customize the database location, update `config.env`:
+1. **Install PostgreSQL** on your system if not already installed
+2. **Create a database** named `users_db` (or update the config.env file)
+3. **Update the configuration** in `config.env`:
 
 ```env
-DB_PATH=./database.sqlite
+DB_USER=postgres
+DB_PASSWORD=your_actual_password
+DB_HOST=localhost
+DB_PORT=5432
+DB_DATABASE=users_db
 PORT=3000
 ```
 
@@ -109,12 +113,12 @@ The application automatically creates a `users` table with the following structu
 
 ```sql
 CREATE TABLE users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(100) UNIQUE NOT NULL,
   age INTEGER,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -162,9 +166,10 @@ All successful responses follow this format:
 ## 🔍 Troubleshooting
 
 ### Database Connection Issues
-1. Ensure the application has write permissions in the project directory
-2. Check if `database.sqlite` file is created in the project root
-3. Test connection: `GET http://localhost:3000/db-test`
+1. Ensure PostgreSQL is running
+2. Verify database credentials in `config.env`
+3. Check if database `users_db` exists
+4. Test connection: `GET http://localhost:3000/db-test`
 
 ### Port Already in Use
 - Change the PORT in `config.env` or use: `PORT=3001 npm start`
@@ -175,12 +180,11 @@ All successful responses follow this format:
 
 ## 📝 Notes
 
-- The application automatically creates the SQLite database file and table on startup
+- The application automatically creates the database table on startup
 - Sample data is inserted if the table is empty
 - Email addresses must be unique
 - All timestamps are automatically managed
 - CORS is enabled for frontend integration
-- **No external database installation required!**
 
 ## 🎯 Deliverables Completed
 
